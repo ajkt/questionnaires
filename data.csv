@@ -1,2 +1,5 @@
-id,abbrev,name,numSubscales,subscaleNames,itemsTotal,itemsPerSubscale,scaleTypeRange,scaleLabels,originPaper,originCitation
-1,SAM,self-assessment manikin,3,"arousal, valence, dominance",3,1,unspecified pictorial,unspecified,"Bradley & Lang 1994",https://doi.org/10.1016/0005-7916(94)90063-9
+id,abbrev,name,numSubscales,subscaleNames,itemsTotal,itemsPerSubscale,scaleTypeRange,scaleLabels,reverseCoded,originPaper,originCitation
+1,SAM,self-assessment manikin,3,"arousal, valence, dominance",3,1,9-point pictorial,on one of 5 figures or between them,n/a,"Bradley & Lang 1994",https://doi.org/10.1016/0005-7916(94)90063-9
+2,IPQ,igroup presence questionnaire,4,"spatial presence, involvement, realism, general presence",14,"1,4, or 5",7-point Likert,-3 (fully disagree) to +3 (fully agree)","SP2,INV3,REAL1","Schubert et al. 2001; Tran et al. 2024","https://doi.org/10.1162/105474601300343603; https://doi.org/10.1145/3689046"
+
+
