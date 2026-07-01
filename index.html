@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Overview of Common HCI Questionnaires</title>
+
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+
+  <style>
+    #search-input {
+      max-width: 300px;
+    }
+
+    /* Highlight rows on mouse over */
+    #data-table tbody tr:hover {
+      background-color: #fffbdd; /* light yellow */
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="section">
+  <div class="container">
+    <h1 class="title">Dataset</h1>
+
+    <!-- Keyword filter -->
+    <div class="field">
+      <label class="label">Filter</label>
+      <div class="control">
+        <input id="search-input" class="input" type="text"
+               placeholder="Type to filter rows...">
+      </div>
+      <p class="help">Filters across all columns.</p>
+    </div>
+
+    <!-- Table -->
+    <table id="data-table" class="table is-striped is-fullwidth">
+      <thead>
+        <!-- Header cells injected by JS -->
+      </thead>
+      <tbody>
+        <!-- Rows injected by JS -->
+      </tbody>
+    </table>
+
+    <p id="status" class="has-text-grey"></p>
+  </div>
+
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    let fullData = [];   // all rows as objects
+    let headers = [];    // column names
+
+    async function loadCSV() {
+      const statusEl = document.getElementById('status');
+      try {
+        statusEl.textContent = 'Loading data...';
+        const response = await fetch('data.csv');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const csvText = await response.text();
+
+        const result = Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        if (result.errors.length) {
+          console.error('CSV parse errors:', result.errors);
+        }
+
+        fullData = result.data;
+        headers = result.meta.fields;
+
+        renderHeaders();
+        renderRows(fullData);
+        statusEl.textContent = `Loaded ${fullData.length} rows.`;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Failed to load data.csv: ' + err.message;
+      }
+    }
+
+    function renderHeaders() {
+      const thead = document.querySelector('#data-table thead');
+      thead.innerHTML = '';
+      const tr = document.createElement('tr');
+
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        tr.appendChild(th);
+      });
+
+      thead.appendChild(tr);
+    }
+
+    function renderRows(rows) {
+      const tbody = document.querySelector('#data-table tbody');
+      tbody.innerHTML = '';
+
+      rows.forEach(rowObj => {
+        const tr = document.createElement('tr');
+
+        headers.forEach(h => {
+          const td = document.createElement('td');
+          td.textContent = rowObj[h];
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function setupFiltering() {
+      const input = document.getElementById('search-input');
+      input.addEventListener('input', () => {
+        const q = input.value.toLowerCase();
+        const filtered = fullData.filter(rowObj => {
+          const text = headers
+            .map(h => (rowObj[h] ?? '').toString())
+            .join(' ')
+            .toLowerCase();
+          return text.includes(q);
+        });
+        renderRows(filtered);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadCSV();
+      setupFiltering();
+    });
+  </script>
+</body>
+</html>

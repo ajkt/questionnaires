@@ -1,0 +1,2 @@
+id,abbrev,name,numSubscales,subscaleNames,itemsTotal,itemsPerSubscale,scaleTypeRange,scaleLabels,originPaper,originCitation
+1,SAM,self-assessment manikin,3,"arousal, valence, dominance",3,1,unspecified pictorial,unspecified,"Bradley & Lang 1994",https://doi.org/10.1016/0005-7916(94)90063-9
