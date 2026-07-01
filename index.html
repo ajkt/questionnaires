@@ -7,132 +7,205 @@
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
 
-  <style>
-    #search-input {
-      max-width: 300px;
-    }
+  <link rel="stylesheet"
+        href="https://unpkg.com/tabulator-tables@5.6.0/dist/css/tabulator.min.css">
 
-    /* Highlight rows on mouse over */
-    #data-table tbody tr:hover {
-      background-color: #fffbdd; /* light yellow */
+  <style>
+    #search-input { max-width: 300px; }
+    .tabulator-row:hover {
+      background-color: #fffbdd !important;
       cursor: pointer;
     }
   </style>
+
 </head>
+
+
 <body class="section">
   <div class="container">
-    <h1 class="title">Dataset</h1>
+    <h1 class="title">Dataset [work-in-progress]</h1>
+
 
     <!-- Keyword filter -->
     <div class="field">
       <label class="label">Filter</label>
       <div class="control">
         <input id="search-input" class="input" type="text"
-               placeholder="Type to filter rows...">
+               placeholder="Type to filter instruments...">
       </div>
-      <p class="help">Filters across all columns.</p>
+      <p class="help">Filters across instrument fields (not origins).</p>
     </div>
 
-    <!-- Table -->
-    <table id="data-table" class="table is-striped is-fullwidth">
-      <thead>
-        <!-- Header cells injected by JS -->
-      </thead>
-      <tbody>
-        <!-- Rows injected by JS -->
-      </tbody>
-    </table>
+    <!-- Tabulator container -->
+    <div id="scales-table"></div>
 
     <p id="status" class="has-text-grey"></p>
   </div>
 
-  <!-- PapaParse for CSV parsing -->
+  <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <script>
-    let fullData = [];   // all rows as objects
-    let headers = [];    // column names
+  <!-- Tabulator JS -->
+  <script src="https://unpkg.com/tabulator-tables@5.6.0/dist/js/tabulator.min.js"></script>
 
-    async function loadCSV() {
+  <script>
+    let table;
+    let originsData = [];  // all origin rows from origins.csv
+
+    async function loadCSVFiles() {
       const statusEl = document.getElementById('status');
+
       try {
         statusEl.textContent = 'Loading data...';
-        const response = await fetch('data.csv');
-        if (!response.ok) throw new Error('HTTP ' + response.status);
 
-        const csvText = await response.text();
+        // Load instruments (data.csv)
+        const [instRes, origRes] = await Promise.all([
+          fetch('data.csv'),
+          fetch('subrows.csv'),
+        ]);
 
-        const result = Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true
-        });
+        if (!instRes.ok) throw new Error('data.csv HTTP ' + instRes.status);
+        if (!origRes.ok) throw new Error('subrows.csv HTTP ' + origRes.status);
 
-        if (result.errors.length) {
-          console.error('CSV parse errors:', result.errors);
-        }
+        const instText = await instRes.text();
+        const origText = await origRes.text();
 
-        fullData = result.data;
-        headers = result.meta.fields;
+        const instResult = Papa.parse(instText, { header: true, skipEmptyLines: true });
+        const origResult = Papa.parse(origText, { header: true, skipEmptyLines: true });
 
-        renderHeaders();
-        renderRows(fullData);
-        statusEl.textContent = `Loaded ${fullData.length} rows.`;
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'Failed to load data.csv: ' + err.message;
+        if (instResult.errors.length) console.warn('data.csv parse errors', instResult.errors);
+        if (origResult.errors.length) console.warn('subrows.csv parse errors', origResult.errors);
+
+        const instruments = instResult.data;
+        originsData = origResult.data;
+
+        statusEl.textContent = `Loaded ${instruments.length} instruments, ${originsData.length} origin rows.`;
+
+        initTable(instruments);
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Failed to load CSV files: ' + e.message;
       }
     }
 
-    function renderHeaders() {
-      const thead = document.querySelector('#data-table thead');
-      thead.innerHTML = '';
-      const tr = document.createElement('tr');
+    function initTable(instruments) {
+      const columns = [
+        {title: "Abbrev", field: "abbrev", width: 90},
+        {title: "Name", field: "name"},
+        {title: "# Subscales", field: "numSubscales", hozAlign: "center"},
+        {title: "Items Total", field: "itemsTotal", hozAlign: "center"},
+	{title: "Items p/Subscale", field: "itemsPerSubscale", hozAlign: "center"},
+	{title: "Scale Type & Range", field: "scaleTypeRange", hozAlign: "center"},
+	{title: "Scale Labels", field: "scaleLabels", hozAlign: "center"},
+	{title: "Items Reversed?", field: "reverseCoded", hozAlign: "center"},
+      ];
 
-      headers.forEach(h => {
-        const th = document.createElement('th');
-        th.textContent = h;
-        tr.appendChild(th);
+      table = new Tabulator("#scales-table", {
+        data: instruments,
+        layout: "fitColumns",
+        columns: columns,
+
+        // Row detail with sub-table of origin rows
+        rowDetail: {
+          format: function(row) {
+            const inst = row.getData();
+            const abbrev = inst.abbrev;
+
+            // Filter origins for this instrument
+            const originRows = originsData.filter(o => o.instrumentAbbrev === abbrev);
+
+            const container = document.createElement("div");
+            container.style.padding = "10px";
+            container.style.background = "#f7f7f7";
+            container.style.borderTop = "1px solid #ddd";
+
+            // Header info
+            let headerHtml = `
+              <div style="margin-bottom:10px;">
+                <strong>Instrument:</strong> ${inst.abbrev} — ${inst.name}<br>
+                <strong>Items total:</strong> ${inst.itemsTotal || ""}<br>
+                <strong>Subscales:</strong> ${inst.numSubscales || ""}
+              </div>
+            `;
+
+            // Origin sub-table
+            let originHtml = "";
+
+            if (originRows.length === 0) {
+              originHtml = `<p><em>No origin information available for ${abbrev}.</em></p>`;
+            } else {
+              originHtml += `
+                <h4 class="title is-6" style="margin-top:5px;">Origins</h4>
+                <table class="table is-narrow is-fullwidth">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Origin Paper</th>
+                      <th>Link</th>
+                      <th>BibTeX</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+              `;
+
+              originRows.forEach((o, idx) => {
+                originHtml += `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${o.originPaper || ""}</td>
+                    <td>${o.originLink ? `<a href="${o.originLink}" target="_blank">link</a>` : ""}</td>
+                    <td><code>${(o.originBibtex || "").replace(/</g, "&lt;")}</code></td>
+                    <td>${o.notes || ""}</td>
+                  </tr>
+                `;
+              });
+
+              originHtml += `
+                  </tbody>
+                </table>
+              `;
+            }
+
+            container.innerHTML = headerHtml + originHtml;
+            return container;
+          },
+          height: "auto",
+        },
+
+        rowClick: function(e, row) {
+          row.toggleDetails();
+        },
       });
 
-      thead.appendChild(tr);
-    }
-
-    function renderRows(rows) {
-      const tbody = document.querySelector('#data-table tbody');
-      tbody.innerHTML = '';
-
-      rows.forEach(rowObj => {
-        const tr = document.createElement('tr');
-
-        headers.forEach(h => {
-          const td = document.createElement('td');
-          td.textContent = rowObj[h];
-          tr.appendChild(td);
-        });
-
-        tbody.appendChild(tr);
-      });
+      setupFiltering();
     }
 
     function setupFiltering() {
       const input = document.getElementById('search-input');
       input.addEventListener('input', () => {
         const q = input.value.toLowerCase();
-        const filtered = fullData.filter(rowObj => {
-          const text = headers
-            .map(h => (rowObj[h] ?? '').toString())
+
+        if (!q) {
+          table.clearFilter();
+          return;
+        }
+
+        table.setFilter(function(data) {
+          const text = Object.values(data)
+            .map(v => (v ?? '').toString())
             .join(' ')
             .toLowerCase();
           return text.includes(q);
         });
-        renderRows(filtered);
       });
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      loadCSV();
-      setupFiltering();
-    });
+    window.addEventListener('DOMContentLoaded', loadCSVFiles);
   </script>
 </body>
 </html>
+
+
+
+
