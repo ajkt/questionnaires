@@ -11,7 +11,7 @@ doi = {https://doi.org/10.1016/0005-7916(94)90063-9},
 url = {https://www.sciencedirect.com/science/article/pii/0005791694900639},
 author = {Margaret M. Bradley and Peter J. Lang},
 }","Original SAM paper."
-IPQ,"Schubert et al. 2001","https://doi.org/10.1162/105474601300343603", "@article{schubert2001experience,
+IPQ,"Schubert et al. 2001","https://doi.org/10.1162/105474601300343603","@article{schubert2001experience,
     author = {Schubert, Thomas and Friedmann, Frank and Regenbrecht, Holger},
     title = {The Experience of Presence: Factor Analytic Insights},
     journal = {Presence: Teleoperators and Virtual Environments},
@@ -24,7 +24,7 @@ IPQ,"Schubert et al. 2001","https://doi.org/10.1162/105474601300343603", "@artic
     url = {https://doi.org/10.1162/105474601300343603},
     eprint = {https://direct.mit.edu/pvar/article-pdf/10/3/266/1623697/105474601300343603.pdf},
 }","Construction of IPQ and factor analysis."
-IPQ, "Tran et al. 2024", "https://doi.org/10.1145/3689046","@article{10.1145/3689046,
+IPQ,"Tran et al. 2024", "https://doi.org/10.1145/3689046","@article{10.1145/3689046,
 author = {Tran, Tanh Quang and Langlotz, Tobias and Young, Jacob and Schubert, Thomas W. and Regenbrecht, Holger},
 title = {Classifying Presence Scores: Insights and Analysis from Two Decades of the Igroup Presence Questionnaire (IPQ)},
 year = {2024},
@@ -36,13 +36,12 @@ number = {5},
 issn = {1073-0516},
 url = {https://doi.org/10.1145/3689046},
 doi = {10.1145/3689046},
-abstract = {Presence, or the experience of being present in a computer-generated environment, is a defining element of virtual reality. While there are different methodologies to measure presence, questionnaires remain the most popular, particularly the Igroup Presence Questionnaire (IPQ). In this article, we analyse the results of over 20 years of IPQ usage to develop a new comparative means of reporting presence scores and comparing them across existing and future work. We additionally report on correct and problematic usage of the questionnaire and, through this, present guidelines on how to administer the IPQ in future to aid further analysis. Finally, we present a new web-based tool to streamline the analysis and reporting of IPQ results, which we hope will facilitate more standardised usage of the questionnaire in future research.},
 journal = {ACM Trans. Comput.-Hum. Interact.},
 month = nov,
 articleno = {61},
 numpages = {26},
 keywords = {presence, usability, virtual reality, perception, empirical studies, survey, ranking scale, meta analysis}
-}", "More recent summary and updated recommendations"
+}","More recent summary and updated recommendations"
 PQ,"Witmer & Singer 1998","https://doi.org/10.1162/105474698565686","@article{witmer1998presence,
     author = {Witmer, Bob G. and Singer, Michael J.},
     title = {Measuring Presence in Virtual Environments: A Presence Questionnaire},

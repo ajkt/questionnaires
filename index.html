@@ -1,32 +1,103 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Overview of Common HCI Questionnaires</title>
-
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
-
-  <link rel="stylesheet"
-        href="https://unpkg.com/tabulator-tables@5.6.0/dist/css/tabulator.min.css">
-
+  <meta charset="UTF-8">
+  <title>[ajkt] Overview of Common HCI Questionnaires</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
-    #search-input { max-width: 300px; }
-    .tabulator-row:hover {
-      background-color: #fffbdd !important;
-      cursor: pointer;
+    body { padding: 2rem; }
+
+    /* ── Table layout ── */
+    #scales-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
     }
+
+    #scales-table thead th {
+      background: #f5f5f5;
+      border-bottom: 2px solid #dbdbdb;
+      padding: 8px 10px;
+      text-align: left;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    #scales-table thead th:hover {
+      background: #ececec;
+    }
+
+    #scales-table thead th.sort-asc::after  { content: " ▲"; font-size: 0.75em; }
+    #scales-table thead th.sort-desc::after { content: " ▼"; font-size: 0.75em; }
+
+    #scales-table tbody tr.data-row {
+      border-bottom: 1px solid #e8e8e8;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #scales-table tbody tr.data-row:hover {
+      background: #fffbdd;
+    }
+
+    #scales-table tbody tr.data-row.detail-open {
+      background: #fffbdd;
+      font-weight: 500;
+    }
+
+    #scales-table tbody td {
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    /* ── Detail row ── */
+    tr.detail-row td {
+      padding: 0;
+      border-bottom: 2px solid #dbdbdb;
+    }
+
+    .detail-inner {
+      padding: 14px 16px;
+      background: #fafafa;
+      border-top: 2px solid #3273dc;
+    }
+
+    .detail-inner table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin-top: 8px;
+    }
+
+    .detail-inner table th,
+    .detail-inner table td {
+      padding: 6px 10px;
+      border: 1px solid #e0e0e0;
+      vertical-align: top;
+      font-size: 0.6rem;
+    }
+
+    .detail-inner table th {
+      background: #f0f0f0;
+      font-weight: 500;
+    }
+
+    .detail-inner code {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.5rem;
+    }
+
+    /* ── Filter ── */
+    #search-input { max-width: 300px; }
   </style>
-
 </head>
-
-
 <body class="section">
   <div class="container">
-    <h1 class="title">Dataset [work-in-progress]</h1>
+    <h1 class="title">Questionnaires Dataset <span class="tag is-warning is-light">work-in-progress</span></h1>
 
-
-    <!-- Keyword filter -->
     <div class="field">
       <label class="label">Filter</label>
       <div class="control">
@@ -36,176 +107,244 @@
       <p class="help">Filters across instrument fields (not origins).</p>
     </div>
 
-    <!-- Tabulator container -->
-    <div id="scales-table"></div>
+    <table id="scales-table">
+      <thead>
+        <tr>
+          <th data-field="abbrev">Abbrev</th>
+          <th data-field="name">Name</th>
+          <th data-field="numSubscales"># Subscales</th>
+          <th data-field="subscaleNames">Subscales</th>
+          <th data-field="itemsTotal">Items Total</th>
+          <th data-field="itemsPerSubscale">Items p/Subscale</th>
+          <th data-field="scaleTypeRange">Scale Type &amp; Range</th>
+          <th data-field="scaleLabels">Scale Labels</th>
+          <th data-field="reverseCoded">Items Reversed?</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
 
-    <p id="status" class="has-text-grey"></p>
+    <p id="status" class="has-text-grey mt-3"></p>
   </div>
 
-  <!-- PapaParse -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <!-- Tabulator JS -->
-  <script src="https://unpkg.com/tabulator-tables@5.6.0/dist/js/tabulator.min.js"></script>
-
   <script>
-    let table;
-    let originsData = [];  // all origin rows from origins.csv
+    // ── State ──────────────────────────────────────────────────────────────
+    let instrumentsData = [];
+    let originsData     = [];
+    let sortField       = null;
+    let sortDir         = "asc";   // "asc" | "desc"
+    let filterText      = "";
 
-    async function loadCSVFiles() {
-      const statusEl = document.getElementById('status');
+    const FIELDS = [
+      "abbrev","name","numSubscales","subscaleNames",
+      "itemsTotal","itemsPerSubscale","scaleTypeRange",
+      "scaleLabels","reverseCoded"
+    ];
 
-      try {
-        statusEl.textContent = 'Loading data...';
+    // ── CSV loading ────────────────────────────────────────────────────────
+    function loadCSVFiles() {
+      setStatus("Loading data...");
 
-        // Load instruments (data.csv)
-        const [instRes, origRes] = await Promise.all([
-          fetch('data.csv'),
-          fetch('subrows.csv'),
-        ]);
+      let instrumentsDone = false;
+      let originsDone     = false;
 
-        if (!instRes.ok) throw new Error('data.csv HTTP ' + instRes.status);
-        if (!origRes.ok) throw new Error('subrows.csv HTTP ' + origRes.status);
-
-        const instText = await instRes.text();
-        const origText = await origRes.text();
-
-        const instResult = Papa.parse(instText, { header: true, skipEmptyLines: true });
-        const origResult = Papa.parse(origText, { header: true, skipEmptyLines: true });
-
-        if (instResult.errors.length) console.warn('data.csv parse errors', instResult.errors);
-        if (origResult.errors.length) console.warn('subrows.csv parse errors', origResult.errors);
-
-        const instruments = instResult.data;
-        originsData = origResult.data;
-
-        statusEl.textContent = `Loaded ${instruments.length} instruments, ${originsData.length} origin rows.`;
-
-        initTable(instruments);
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Failed to load CSV files: ' + e.message;
+      function checkDone() {
+        if (instrumentsDone && originsDone) {
+          setStatus("");
+          renderTable();
+        }
       }
-    }
 
-    function initTable(instruments) {
-      const columns = [
-        {title: "Abbrev", field: "abbrev", width: 90},
-        {title: "Name", field: "name"},
-        {title: "# Subscales", field: "numSubscales", hozAlign: "center"},
-        {title: "Items Total", field: "itemsTotal", hozAlign: "center"},
-	{title: "Items p/Subscale", field: "itemsPerSubscale", hozAlign: "center"},
-	{title: "Scale Type & Range", field: "scaleTypeRange", hozAlign: "center"},
-	{title: "Scale Labels", field: "scaleLabels", hozAlign: "center"},
-	{title: "Items Reversed?", field: "reverseCoded", hozAlign: "center"},
-      ];
-
-      table = new Tabulator("#scales-table", {
-        data: instruments,
-        layout: "fitColumns",
-        columns: columns,
-
-        // Row detail with sub-table of origin rows
-        rowDetail: {
-          format: function(row) {
-            const inst = row.getData();
-            const abbrev = inst.abbrev;
-
-            // Filter origins for this instrument
-            const originRows = originsData.filter(o => o.instrumentAbbrev === abbrev);
-
-            const container = document.createElement("div");
-            container.style.padding = "10px";
-            container.style.background = "#f7f7f7";
-            container.style.borderTop = "1px solid #ddd";
-
-            // Header info
-            let headerHtml = `
-              <div style="margin-bottom:10px;">
-                <strong>Instrument:</strong> ${inst.abbrev} — ${inst.name}<br>
-                <strong>Items total:</strong> ${inst.itemsTotal || ""}<br>
-                <strong>Subscales:</strong> ${inst.numSubscales || ""}
-              </div>
-            `;
-
-            // Origin sub-table
-            let originHtml = "";
-
-            if (originRows.length === 0) {
-              originHtml = `<p><em>No origin information available for ${abbrev}.</em></p>`;
-            } else {
-              originHtml += `
-                <h4 class="title is-6" style="margin-top:5px;">Origins</h4>
-                <table class="table is-narrow is-fullwidth">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Origin Paper</th>
-                      <th>Link</th>
-                      <th>BibTeX</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-              `;
-
-              originRows.forEach((o, idx) => {
-                originHtml += `
-                  <tr>
-                    <td>${idx + 1}</td>
-                    <td>${o.originPaper || ""}</td>
-                    <td>${o.originLink ? `<a href="${o.originLink}" target="_blank">link</a>` : ""}</td>
-                    <td><code>${(o.originBibtex || "").replace(/</g, "&lt;")}</code></td>
-                    <td>${o.notes || ""}</td>
-                  </tr>
-                `;
-              });
-
-              originHtml += `
-                  </tbody>
-                </table>
-              `;
-            }
-
-            container.innerHTML = headerHtml + originHtml;
-            return container;
-          },
-          height: "auto",
+      Papa.parse("data.csv", {
+        header: true,
+        download: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          instrumentsData = results.data;
+          instrumentsDone = true;
+          checkDone();
         },
-
-        rowClick: function(e, row) {
-          row.toggleDetails();
-        },
+        error: function(err) { setStatus("Error loading data.csv: " + err.message); }
       });
 
-      setupFiltering();
+      Papa.parse("subrows.csv", {
+        header: true,
+        download: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          originsData = results.data;
+          originsDone = true;
+          checkDone();
+        },
+        error: function(err) { setStatus("Error loading origins.csv: " + err.message); }
+      });
     }
 
-    function setupFiltering() {
-      const input = document.getElementById('search-input');
-      input.addEventListener('input', () => {
-        const q = input.value.toLowerCase();
+    // ── Render ─────────────────────────────────────────────────────────────
+    function getFilteredSorted() {
+      let rows = instrumentsData.slice();
 
-        if (!q) {
-          table.clearFilter();
-          return;
+      // Filter
+      if (filterText) {
+        const q = filterText.toLowerCase();
+        rows = rows.filter(r =>
+          FIELDS.some(f => (r[f] || "").toLowerCase().includes(q))
+        );
+      }
+
+      // Sort
+      if (sortField) {
+        rows.sort(function(a, b) {
+          const av = (a[sortField] || "").toLowerCase();
+          const bv = (b[sortField] || "").toLowerCase();
+          if (av < bv) return sortDir === "asc" ? -1 :  1;
+          if (av > bv) return sortDir === "asc" ?  1 : -1;
+          return 0;
+        });
+      }
+
+      return rows;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById("table-body");
+      tbody.innerHTML = "";
+
+      const rows = getFilteredSorted();
+
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${FIELDS.length}" class="has-text-grey" style="padding:12px">No results.</td></tr>`;
+        return;
+      }
+
+      rows.forEach(function(inst) {
+        // ── Data row ──
+        const tr = document.createElement("tr");
+        tr.className = "data-row";
+        tr.dataset.abbrev = inst.abbrev;
+
+        FIELDS.forEach(function(f) {
+          const td = document.createElement("td");
+          td.textContent = inst[f] || "";
+          tr.appendChild(td);
+        });
+
+        // ── Detail row (hidden until click) ──
+        const detailTr = document.createElement("tr");
+        detailTr.className = "detail-row";
+        detailTr.style.display = "none";
+
+        const detailTd = document.createElement("td");
+        detailTd.colSpan = FIELDS.length;
+
+        const inner = document.createElement("div");
+        inner.className = "detail-inner";
+        inner.innerHTML = buildDetailHTML(inst);
+
+        detailTd.appendChild(inner);
+        detailTr.appendChild(detailTd);
+
+        // ── Click to toggle ──
+        tr.addEventListener("click", function() {
+          const isOpen = tr.classList.contains("detail-open");
+
+          // Close all open rows first
+          document.querySelectorAll("tr.data-row.detail-open").forEach(function(openTr) {
+            openTr.classList.remove("detail-open");
+            openTr.nextElementSibling.style.display = "none";
+          });
+
+          // If it wasn't open, open it
+          if (!isOpen) {
+            tr.classList.add("detail-open");
+            detailTr.style.display = "";
+          }
+        });
+
+        tbody.appendChild(tr);
+        tbody.appendChild(detailTr);
+      });
+    }
+
+    // ── Detail HTML builder ────────────────────────────────────────────────
+    function buildDetailHTML(inst) {
+      const abbrev = inst.abbrev;
+      const originRows = originsData.filter(o => o.instrumentAbbrev === abbrev);
+
+      let headerHtml = `
+      
+      `;
+
+      if (originRows.length === 0) {
+        return headerHtml + `<p><em>No origin information available for ${abbrev}.</em></p>`;
+      }
+
+      let tableHtml = `
+        <strong>Relevant resources</strong>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Origin Paper</th>
+              <th>Link</th>
+              <th>Notes</th>
+              <th>BibTex</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${originRows.map((o, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td>${o.originPaper || ""}</td>
+                <td>${o.originLink
+                  ? `<a href="${o.originLink}" target="_blank">link</a>`
+                  : ""}</td>
+                <td>${o.notes || ""}</td>
+                <td><code>${(o.originBibtex || "").replace(/</g, "&lt;")}</code></td>
+		</tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+
+      return headerHtml + tableHtml;
+    }
+
+    // ── Sorting ────────────────────────────────────────────────────────────
+    document.querySelectorAll("#scales-table thead th").forEach(function(th) {
+      th.addEventListener("click", function() {
+        const field = th.dataset.field;
+        if (sortField === field) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortField = field;
+          sortDir = "asc";
         }
 
-        table.setFilter(function(data) {
-          const text = Object.values(data)
-            .map(v => (v ?? '').toString())
-            .join(' ')
-            .toLowerCase();
-          return text.includes(q);
+        // Update header classes
+        document.querySelectorAll("#scales-table thead th").forEach(function(h) {
+          h.classList.remove("sort-asc", "sort-desc");
         });
+        th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
+
+        renderTable();
       });
+    });
+
+    // ── Filtering ──────────────────────────────────────────────────────────
+    document.getElementById("search-input").addEventListener("input", function() {
+      filterText = this.value.trim();
+      renderTable();
+    });
+
+    // ── Status helper ──────────────────────────────────────────────────────
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
     }
 
-    window.addEventListener('DOMContentLoaded', loadCSVFiles);
+    // ── Boot ───────────────────────────────────────────────────────────────
+    loadCSVFiles();
   </script>
 </body>
 </html>
-
-
-
 
